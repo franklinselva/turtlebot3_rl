@@ -1,5 +1,5 @@
 # turtlebot3_rl
 
-##I NSTALLATION
+## INSTALLATION
 
 ## PROCEDURE
