@@ -92,11 +92,11 @@ class qLearnAgent():
     def __init__(self, state_size, action_size):
         self.pub_result = rospy.Publisher('result', Float32MultiArray, queue_size=5)
         self.dirPath = os.path.dirname(os.path.realpath(__file__))
-        self.dirPath = self.dirPath.replace('turtlebot3_ml/src', 'turtlebot3_ml/saved_model/')
+        self.dirPath = self.dirPath.replace('turtlebot3_rl/src', 'turtlebot3_rl/saved_model/q_learning/model_')
         self.result = Float32MultiArray()
 
         self.load_model = rospy.get_param("/load_model", False)
-        self.load_episode = 0
+        self.load_episode = rospy.get_param("/load_episode", 0)
         self.state_size = state_size
         self.action_size = action_size
         self.episode_step = 6000
@@ -290,8 +290,8 @@ if __name__ == '__main__':
     scores, episodes = [], []
     global_step = 0
     start_time = time.time()
-
-    print(msg)
+    if use_hitl:
+        print(msg)
     
     for e in range(agent.load_episode + 1, EPISODES):
         done = False
@@ -335,8 +335,8 @@ if __name__ == '__main__':
                 with open(agent.dirPath + str(e) + '.json', 'w') as outfile:
                     json.dump(param_dictionary, outfile)
 
-                writeData(score_list, agent.dirPath + "/data/qlearning_hitl_scores.pickle")
-                writeData(epsilon_list, agent.dirPath + "/data/qlearning_hitl_epsilon.pickle")
+                # writeData(score_list, agent.dirPath + "/data/qlearning_hitl_scores.pickle")
+                # writeData(epsilon_list, agent.dirPath + "/data/qlearning_hitl_epsilon.pickle")
 
             if done:
                 result.data = [score, np.max(agent.q_value)]

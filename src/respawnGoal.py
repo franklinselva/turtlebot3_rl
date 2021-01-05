@@ -9,14 +9,16 @@ from geometry_msgs.msg import Pose
 class Respawn():
     def __init__(self):
         self.modelPath = os.path.dirname(os.path.realpath(__file__))
-        self.modelPath = self.modelPath.replace('turtlebot3_ml/src',
+        print (self.modelPath)
+        self.modelPath = self.modelPath.replace('turtlebot3_rl/src',
                                                 'turtlebot3_simulations/turtlebot3_gazebo/models/turtlebot3_square/goal_box/model.sdf')
+        print (self.modelPath)
         self.f = open(self.modelPath, 'r')
         self.model = self.f.read()
         self.stage = rospy.get_param('/stage_number')
         self.goal_position = Pose()
-        self.init_goal_x = 0.6
-        self.init_goal_y = 0.0
+        self.init_goal_x = 1.5
+        self.init_goal_y = -0.5
         self.goal_position.position.x = self.init_goal_x
         self.goal_position.position.y = self.init_goal_y
         self.modelName = 'goal'
@@ -63,7 +65,7 @@ class Respawn():
         if delete:
             self.deleteModel()
 
-        if self.stage != 4:
+        if self.stage != 2:
             while position_check:
                 goal_x = random.randrange(-12, 13) / 10.0
                 goal_y = random.randrange(-12, 13) / 10.0
@@ -87,23 +89,24 @@ class Respawn():
                 self.goal_position.position.y = goal_y
 
         else:
-            while position_check:
-                # goal_x_list = [0.6, 1.9, 0.5, 0.2, -0.8, -1, -1.9, 0.5, 2, 0.5, 0, -0.1, -2]
-                # goal_y_list = [0, -0.5, -1.9, 1.5, -0.9, 1, 1.1, -1.5, 1.5, 1.8, -1, 1.6, -0.8]
+            # while position_check:
+            # goal_x_list = [0.6, 1.9, 0.5, 0.2, -0.8, -1, -1.9, 0.5, 2, 0.5, 0, -0.1, -2]
+            # goal_y_list = [0, -0.5, -1.9, 1.5, -0.9, 1, 1.1, -1.5, 1.5, 1.8, -1, 1.6, -0.8]
 
-                goal_x_list = [1.9]
-                goal_y_list = [-0.5]
-                
-                self.index = random.randrange(0, 13)
-                print(self.index, self.last_index)
-                if self.last_index == self.index:
-                    position_check = True
-                else:
-                    self.last_index = self.index
-                    position_check = False
+            goal_x_list = [1.5]
+            goal_y_list = [-0.5]
+            
+            # self.index = random.randrange(0, 13)
+            # print(self.index, self.last_index)
+            # if self.last_index == self.index:
+            #     position_check = True
+            # else:
+            #     self.last_index = self.index
+            #     position_check = False
 
-                self.goal_position.position.x = goal_x_list[self.index]
-                self.goal_position.position.y = goal_y_list[self.index]
+            self.goal_position.position.x = goal_x_list[0]
+            self.goal_position.position.y = goal_y_list[0]
+
 
         time.sleep(0.5)
         self.respawnModel()

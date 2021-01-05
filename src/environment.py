@@ -128,7 +128,6 @@ class Env():
             self.pub_cmd_vel.publish(Twist())
             self.goal_x, self.goal_y = self.respawn_goal.getPosition(True, delete=True)
             self.goal_distance = self.getGoalDistace()
-            self.threshold = self.goal_distance*0.35 # Threshold has been set to 35%
             self.get_goalbox = False
 
         return reward
@@ -138,11 +137,11 @@ class Env():
         Handles iteration step
         '''
 
-        max_angular_vel = 1.5
+        max_angular_vel = 2.0
         ang_vel = ((self.action_size - 1)/2 - action) * max_angular_vel * 0.5
 
         vel_cmd = Twist()
-        vel_cmd.linear.x = 0.15
+        vel_cmd.linear.x = 0.25
         vel_cmd.angular.z = ang_vel
         self.pub_cmd_vel.publish(vel_cmd)
 
