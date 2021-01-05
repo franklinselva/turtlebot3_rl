@@ -1,0 +1,11 @@
+<launch>
+ #Performs q learning using turtlebot3 with dynamic_obstacles
+
+  <arg name="stage" default="3"/>
+  <param name="stage_number"  value="$(arg stage)"/>
+
+  <include file="$(find turtlebot3_gazebo)/launch/turtlebot3_stage_3.launch" />
+  <node pkg = "turtlebot3_ml" type = "dynamic_obstacle.py" name = "moving_obstacle" output = "screen" />
+  <node pkg="turtlebot3_ml" type="q_learning_dynamic.py" name="qLearningAgent_Dynamic" output="screen" />
+
+</launch>
