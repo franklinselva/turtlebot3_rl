@@ -2,6 +2,8 @@
  #Performs q learning using turtlebot3.
   <arg name="stage" default="2"/>
   <param name="stage_number"  value="$(arg stage)"/>
+  <param name="use_hitl" value="False" />
+  <param name="load_model" value="True" />
 
   <arg name="model" default="burger"/>
   <arg name="x_pos" default="0.0"/>
@@ -21,5 +23,4 @@
 
   <node name="spawn_urdf" pkg="gazebo_ros" type="spawn_model" args="-urdf -model turtlebot3_burger -x $(arg x_pos) -y $(arg y_pos) -z $(arg z_pos) -param robot_description" />
   <node pkg="turtlebot3_ml" type="q_learning.py" name="qLearningAgent" output="screen" />
-  <node pkg="turtlebot3_ml" type="result_draw.py" name="result_graph" output="screen" />
 </launch>

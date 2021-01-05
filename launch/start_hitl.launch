@@ -1,9 +1,0 @@
-<launch>
-<!-- Start this launch file to enable human in the loop in the training process -->
-
-<!-- Setup parameters -->
-    <rosparam param="use_hitl">1</rosparam>
-    <include file = "$(find follow_waypoints)/launch/follow_waypoints.launch" />
-    <node pkg = "turtlebot3_ml" type = "start_hitl.py" name = "start_hitl" output = "screen" />
-
-</launch>

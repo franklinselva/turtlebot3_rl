@@ -18,7 +18,7 @@ from keras.layers.core import Dense, Dropout, Activation
 
 from std_msgs.msg import Float32MultiArray
 from environment import Env
-from teleop_keyboard import PublishThread, vels
+from hitl import PublishThread, vels
 
 EPISODES = 3000
 
@@ -92,10 +92,10 @@ class qLearnAgent():
     def __init__(self, state_size, action_size):
         self.pub_result = rospy.Publisher('result', Float32MultiArray, queue_size=5)
         self.dirPath = os.path.dirname(os.path.realpath(__file__))
-        self.dirPath = self.dirPath.replace('turtlebot3_ml/scripts', 'turtlebot3_ml/saved_model/')
+        self.dirPath = self.dirPath.replace('turtlebot3_ml/src', 'turtlebot3_ml/saved_model/')
         self.result = Float32MultiArray()
 
-        self.load_model = False
+        self.load_model = rospy.get_param("/load_model", False)
         self.load_episode = 0
         self.state_size = state_size
         self.action_size = action_size
@@ -260,6 +260,7 @@ if __name__ == '__main__':
     rospy.init_node('q_learning_turtlebot3')
     pub_result = rospy.Publisher('result', Float32MultiArray, queue_size=5)
     pub_get_action = rospy.Publisher('get_action', Float32MultiArray, queue_size=5)
+    use_hitl = rospy.get_param("/use_hitl", False)
     result = Float32MultiArray()
     get_action = Float32MultiArray()
 
