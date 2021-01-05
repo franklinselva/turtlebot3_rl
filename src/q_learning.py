@@ -267,15 +267,15 @@ if __name__ == '__main__':
     global settings
     settings = termios.tcgetattr(sys.stdin)
 
+    if use_hitl:
+        speed = rospy.get_param("~speed", 0.5)
+        turn = rospy.get_param("~turn", 2.0)
+        repeat = rospy.get_param("~repeat_rate", 0.0)
+        key_timeout = rospy.get_param("~key_timeout", 0.1)
+        if key_timeout == 0.0:
+            key_timeout = None
 
-    speed = rospy.get_param("~speed", 0.5)
-    turn = rospy.get_param("~turn", 2.0)
-    repeat = rospy.get_param("~repeat_rate", 0.0)
-    key_timeout = rospy.get_param("~key_timeout", 0.1)
-    if key_timeout == 0.0:
-        key_timeout = None
-
-    pub_thread = PublishThread(repeat)
+        pub_thread = PublishThread(repeat)
 
     state_size = 364 # No.of data from laser scan
     action_size = 5 #Left, Right, Rotate Front and Back
@@ -297,14 +297,15 @@ if __name__ == '__main__':
         done = False
         state = env.reset()
         score = 0
-
-        if e%5 == 0:
-            rospy.loginfo("Waiting for Human in the loop")
-            print(vels(speed,turn))
-            publishHITL(pub_thread, False)
-            env.setReward(state, False, action)
-        else:
-            publishHITL(pub_thread, True)
+        
+        if use_hitl:
+            if e%5 == 0:
+                rospy.loginfo("Waiting for Human in the loop")
+                print(vels(speed,turn))
+                publishHITL(pub_thread, False)
+                env.setReward(state, False, action)
+            else:
+                publishHITL(pub_thread, True)
 
         for t in range(agent.episode_step):
             action = agent.getAction(state)
