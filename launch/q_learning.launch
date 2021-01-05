@@ -2,8 +2,8 @@
  #Performs q learning using turtlebot3.
   <arg name="stage" default="2"/>
   <param name="stage_number"  value="$(arg stage)"/>
-  <param name="use_hitl" value="False" />
-  <param name="load_model" value="True" />
+  <param name="use_hitl" value="false" />
+  <param name="load_model" value="true" />
 
   <arg name="model" default="burger"/>
   <arg name="x_pos" default="0.0"/>
