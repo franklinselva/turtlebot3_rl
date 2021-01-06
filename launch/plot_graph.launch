@@ -1,0 +1,4 @@
+<launch>
+
+    <node name="plot_result" pkg="turtlebot3_ml" type="result_plot.py" output="screen" />
+</launch>

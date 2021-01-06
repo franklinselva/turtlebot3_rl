@@ -4,7 +4,7 @@ import rospy
 import pyqtgraph as pg
 import sys
 import pickle
-from std_msgs.msg import Float32
+from std_msgs.msg import Float32MultiArray, Float32
 from PyQt5.QtGui import *
 from PyQt5.QtCore import *
 
@@ -12,9 +12,10 @@ class Window(QMainWindow):
     def __init__(self):
         super(Window, self).__init__()
         self.setWindowTitle("Result")
-        self.setGeometry(50, 50, 600, 350)
-        self.graph_sub = rospy.Subscriber('result', Float32, self.data)
+        self.setGeometry(50, 50, 600, 650)
+        self.graph_sub = rospy.Subscriber('result', Float32MultiArray, self.data)
         self.ep = []
+        self.data = []
         self.rewards = []
         self.x = []
         self.count = 1
@@ -27,11 +28,20 @@ class Window(QMainWindow):
         self.plot()
 
     def data(self, data):
+        self.data.append(data.data[0])
         self.ep.append(self.size_ep + self.count)
         self.count += 1
-        self.rewards.append(data.data)
+        self.rewards.append(data.data[1])
+
 
     def plot(self):
+        self.qValuePlt = pg.PlotWidget(self, title="Average max Q-value")
+        self.qValuePlt.move(0, 320)
+        self.qValuePlt.resize(600, 300)
+        self.timer1 = pg.QtCore.QTimer()
+        self.timer1.timeout.connect(self.update)
+        self.timer1.start(200)
+
         self.rewardsPlt = pg.PlotWidget(self, title="Total reward")
         self.rewardsPlt.move(0, 10)
         self.rewardsPlt.resize(600, 300)
@@ -44,8 +54,10 @@ class Window(QMainWindow):
 
     def update(self):
         self.rewardsPlt.showGrid(x=True, y=True)
-        self.rewardsPlt.plot(self.ep, self.rewards, pen=(255, 0, 0))
-        # self.save_data([self.ep, self.data])
+        self.qValuePlt.showGrid(x=True, y=True)
+        self.rewardsPlt.plot(self.ep, self.data, pen=(255, 0, 0))
+        self.save_data([self.ep, self.data])
+        self.qValuePlt.plot(self.ep, self.rewards, pen=(0, 255, 0))
 
     def load_data(self):
         try:

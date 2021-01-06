@@ -109,7 +109,10 @@ class Env():
             tr = 1 - 4 * math.fabs(0.5 - math.modf(0.25 + 0.5 * angle % (2 * math.pi) / math.pi)[0])
             yaw_reward.append(tr)
 
-        distance_rate = 2 ** (current_distance / self.goal_distance)
+        try:
+            distance_rate = 2 ** (current_distance / self.goal_distance)
+        except Exception as e:
+            distance_rate = 1.
         reward = ((round(yaw_reward[action] * 5, 2)) * distance_rate)
 
         if done:
@@ -129,6 +132,7 @@ class Env():
             self.goal_x, self.goal_y = self.respawn_goal.getPosition(True, delete=True)
             self.goal_distance = self.getGoalDistace()
             self.get_goalbox = False
+            self.reset()
 
         return reward
 

@@ -347,13 +347,14 @@ if __name__ == '__main__':
                 m, s = divmod(int(time.time() - start_time), 60)
                 h, m = divmod(m, 60)
 
-                rospy.loginfo('Ep: %d score: %.2f memory: %d epsilon: %.2f time: %d:%02d:%02d distance covered: %f',
-                            e, score, len(agent.memory), agent.epsilon, h, m, s, env.goal_distance)
+                rospy.loginfo('Ep: %d Q value: %.2f epsilon: %.2f time: %d:%02d:%02d',
+                            e, float(np.max(agent.q_value)), agent.epsilon, h, m, s)
                 param_keys = ['epsilon']
                 param_values = [agent.epsilon]
                 param_dictionary = dict(zip(param_keys, param_values))
                 score_list.append(score)
                 epsilon_list.append(agent.epsilon)
+                env.reset()
                 break
 
             global_step += 1
