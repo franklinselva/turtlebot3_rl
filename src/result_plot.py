@@ -8,6 +8,9 @@ from std_msgs.msg import Float32MultiArray, Float32
 from PyQt5.QtGui import *
 from PyQt5.QtCore import *
 
+pg.setConfigOption('background', 'w')
+pg.setConfigOption('foreground', 'k')
+
 class Window(QMainWindow):
     def __init__(self):
         super(Window, self).__init__()
@@ -53,8 +56,8 @@ class Window(QMainWindow):
         self.show()
 
     def update(self):
-        self.rewardsPlt.showGrid(x=True, y=True)
-        self.qValuePlt.showGrid(x=True, y=True)
+        self.rewardsPlt.showGrid(x=False, y=False)
+        self.qValuePlt.showGrid(x=False, y=False)
         self.rewardsPlt.plot(self.ep, self.data, pen=(255, 0, 0))
         self.save_data([self.ep, self.data])
         self.qValuePlt.plot(self.ep, self.rewards, pen=(0, 255, 0))

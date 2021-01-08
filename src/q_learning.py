@@ -347,10 +347,10 @@ if __name__ == '__main__':
                 m, s = divmod(int(time.time() - start_time), 60)
                 h, m = divmod(m, 60)
 
-                rospy.loginfo('Ep: %d Q value: %.2f epsilon: %.2f time: %d:%02d:%02d',
-                            e, float(np.max(agent.q_value)), agent.epsilon, h, m, s)
-                param_keys = ['epsilon']
-                param_values = [agent.epsilon]
+                rospy.loginfo('Ep: %d Q value: %.2f Reward %.2f epsilon: %.2f time: %d:%02d:%02d',
+                            e, float(np.max(agent.q_value)), score, agent.epsilon, h, m, s)
+                param_keys = ['epsilon', 'q-value']
+                param_values = [agent.epsilon, float(np.max(agent.q_value))]
                 param_dictionary = dict(zip(param_keys, param_values))
                 score_list.append(score)
                 epsilon_list.append(agent.epsilon)
@@ -360,6 +360,7 @@ if __name__ == '__main__':
             global_step += 1
             if global_step % agent.target_update == 0:
                 rospy.loginfo("UPDATE TARGET NETWORK")
+                agent.updateTargetModel()
 
         if agent.epsilon > agent.epsilon_min:
             agent.epsilon *= agent.epsilon_decay
