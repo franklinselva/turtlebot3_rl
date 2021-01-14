@@ -11,7 +11,7 @@ from collections import deque
 
 sys.path.append(os.path.dirname(os.path.abspath(os.path.dirname(__file__))))
 
-from std_msgs.msg import Float32MultiArray, Float32
+from std_msgs.msg import Float32MultiArray
 from environment import Env
 
 
@@ -21,7 +21,7 @@ class Sarsa:
     def __init__(self, actions, epsilon, alpha, gamma):
         self.pub_result = rospy.Publisher('result', Float32MultiArray, queue_size=5)
         self.dirPath = os.path.dirname(os.path.realpath(__file__))
-        self.dirPath = self.dirPath.replace('turtlebot3_ml/scripts/sarsa', 'turtlebot3_ml/saved_model/sarsa/stage_2_')
+        self.dirPath = self.dirPath.replace('turtlebot3_rl/src', 'turtlebot3_rl/saved_model/sarsa/model_')
         self.result = Float32MultiArray()
 
         self.q = {}
@@ -72,7 +72,7 @@ def writeData(data, filename):
 
 if __name__ == '__main__':
     rospy.init_node('sarsa_turtlebot3')
-    pub_result = rospy.Publisher('result', Float32, queue_size=5)
+    pub_result = rospy.Publisher('result', Float32MultiArray, queue_size=5)
     # pub_get_action = rospy.Publisher('get_action', Float32MultiArray, queue_size=5)
     result = Float32MultiArray()
     # get_action = Float32MultiArray()
@@ -133,24 +133,24 @@ if __name__ == '__main__':
                     state = next_state
                 else:
                     # last_time_steps = np.append(last_time_steps, [int(i + 1)])
-                    result.data = [score, np.max(agent.q)]
-                    pub_result.publish(score)
+                    result.data = [score, np.max(agent.q.values())]
+                    pub_result.publish(result)
                     score_list.append(score)
                     epsilon_list.append(e)
 
                     m, s = divmod(int(time.time() - start_time), 60)
                     h, m = divmod(m, 60)
 
-                    rospy.loginfo("EP: "+str(e+1)+" - [alpha: "+str(round(agent.alpha,2))+" - gamma: "+str(round(agent.gamma,2))+" - epsilon: "+str(round(agent.epsilon,2))+"] - Reward: "+str(score)+" \
-                            Time: %d:%02d:%02d" % (h, m, s))
-                    param_keys = ['epsilon']
-                    param_values = [agent.epsilon]
+                    rospy.loginfo("EP: %d Q-value: %.2f Epsilon: %.2f Reward: %.2f Time: %d:%02d:%02d", e+1, np.max(agent.q.values()), agent.epsilon, \
+                        score, h, m, s)
+                    param_keys = ['epsilon', 'q-value']
+                    param_values = [agent.epsilon, float(np.max(agent.q.values()))]
                     param_dictionary = dict(zip(param_keys, param_values))
                     score_list.append(score)
                     epsilon_list.append(agent.epsilon)
                     break
 
-            if e%10==0:
+            if (e+1)%10==0:
                 # agent.model.save(agent.dirPath + str(e) + '.h5')
                 with open(agent.dirPath + str(e) + '.json', 'w') as outfile:
                         json.dump(param_dictionary, outfile)
@@ -158,6 +158,6 @@ if __name__ == '__main__':
     except KeyboardInterrupt as e:
         rospy.loginfo("Stopping Turtlebot")
         rospy.loginfo("Writing values to file")
-        writeData(score_list, "./data/sarsa_scores")
-        writeData(epsilon_list, "./data/sarsa_epsilon")
+        # writeData(score_list, "./data/sarsa_scores")
+        # writeData(epsilon_list, "./data/sarsa_epsilon")
         rospy.loginfo("Done. Exiting")

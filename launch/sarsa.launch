@@ -2,7 +2,7 @@
   <arg name="stage" default="2"/>
   <param name="stage_number"  value="$(arg stage)"/>
   <param name="use_hitl" value="false" />
-  <param name="load_model" value="true" />
+  <param name="load_model" value="false" />
 
   <arg name="model" default="burger"/>
   <arg name="x_pos" default="0.0"/>

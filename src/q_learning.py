@@ -145,6 +145,7 @@ class qLearnAgent():
             return reward + self.discount_factor * np.amax(next_target)
 
     def updateTargetModel(self):
+        # rospy.loginfo("Updated TARGET NETWORK!!!")
         self.target_model.set_weights(self.model.get_weights())
 
     def getAction(self, state):
@@ -214,7 +215,7 @@ def getKey(key_timeout):
     return key
 
 
-def publishHITL(pub_thread, Done = False):
+def publishHITL(pub_thread, agent, Done = False):
     '''
     Function to call publish thread for teleop key
     '''
@@ -224,6 +225,9 @@ def publishHITL(pub_thread, Done = False):
         pub_thread.update(x, y, z, th, speed, turn)
 
         while  not Done:
+            # action = agent.getAction()
+
+            #agent.appendMemory(state, action, )
             key = getKey(key_timeout)
             if key in moveBindings.keys():
                 x = moveBindings[key][0]
@@ -251,6 +255,7 @@ def publishHITL(pub_thread, Done = False):
                     break
  
             pub_thread.update(x, y, z, th, speed, turn)
+            agent.updateTargetModel()
 
     except Exception as e:
         print(e)
@@ -302,10 +307,10 @@ if __name__ == '__main__':
             if e%5 == 0:
                 rospy.loginfo("Waiting for Human in the loop")
                 print(vels(speed,turn))
-                publishHITL(pub_thread, False)
+                publishHITL(pub_thread, agent, False)
                 env.setReward(state, False, action)
             else:
-                publishHITL(pub_thread, True)
+                publishHITL(pub_thread, agent, True)
 
         for t in range(agent.episode_step):
             action = agent.getAction(state)
@@ -338,14 +343,20 @@ if __name__ == '__main__':
                 # writeData(score_list, agent.dirPath + "/data/qlearning_hitl_scores.pickle")
                 # writeData(epsilon_list, agent.dirPath + "/data/qlearning_hitl_epsilon.pickle")
 
-            if done:
+            if done or env.get_goalbox:
                 result.data = [score, np.max(agent.q_value)]
                 pub_result.publish(result)
-                agent.updateTargetModel()
+                if e% 10 == 0:
+                    agent.updateTargetModel()
                 scores.append(score)
                 episodes.append(e)
                 m, s = divmod(int(time.time() - start_time), 60)
                 h, m = divmod(m, 60)
+                print ('-'*100)
+                if use_hitl:
+                    rospy.loginfo("Q-LEARNING NETWORK ASSISTED HITL!!")
+                else:
+                    rospy.loginfo("Q-LEARNING NETWORK!!!")
 
                 rospy.loginfo('Ep: %d Q value: %.2f Reward %.2f epsilon: %.2f time: %d:%02d:%02d',
                             e, float(np.max(agent.q_value)), score, agent.epsilon, h, m, s)
@@ -359,7 +370,6 @@ if __name__ == '__main__':
 
             global_step += 1
             if global_step % agent.target_update == 0:
-                rospy.loginfo("UPDATE TARGET NETWORK")
                 agent.updateTargetModel()
 
         if agent.epsilon > agent.epsilon_min:

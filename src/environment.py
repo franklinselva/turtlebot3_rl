@@ -90,7 +90,7 @@ class Env():
             done = True
 
         current_distance = round(math.hypot(self.goal_x - self.position.x, self.goal_y - self.position.y), 2)
-        if current_distance < 0.2:
+        if current_distance < 0.4:
             self.get_goalbox = True
 
         return scan_range + [heading, current_distance, obstacle_min_range, obstacle_angle], done
@@ -126,7 +126,7 @@ class Env():
             self.pub_cmd_vel.publish(Twist())
 
         if self.get_goalbox:
-            rospy.loginfo("Goal!!")
+            rospy.loginfo("GOAL REACHED !!")
             reward = 200
             self.pub_cmd_vel.publish(Twist())
             self.goal_x, self.goal_y = self.respawn_goal.getPosition(True, delete=True)
