@@ -20,6 +20,7 @@ class Env():
         self.goal_x = 0
         self.goal_y = 0
         self.heading = 0
+        self.collision = 0
         self.action_size = action_size
         self.initGoal = True
         self.get_goalbox = False
@@ -116,9 +117,10 @@ class Env():
         reward = ((round(yaw_reward[action] * 5, 2)) * distance_rate)
 
         if done:
-            rospy.loginfo("Collision!!")
+            # rospy.loginfo("Collision!!")
             reward = -150
             self.pub_cmd_vel.publish(Twist())
+            self.collision += 1
 
         if self.getGoalDistace() > self.threshold:
             # rospy.loginfo("Taking more distance")
@@ -126,12 +128,13 @@ class Env():
             self.pub_cmd_vel.publish(Twist())
 
         if self.get_goalbox:
-            rospy.loginfo("GOAL REACHED !!")
+            # rospy.loginfo("GOAL REACHED !!")
+            # print ('-'*100)
             reward = 200
             self.pub_cmd_vel.publish(Twist())
             self.goal_x, self.goal_y = self.respawn_goal.getPosition(True, delete=True)
             self.goal_distance = self.getGoalDistace()
-            self.get_goalbox = False
+            # self.get_goalbox = False
             self.reset()
 
         return reward

@@ -33,6 +33,10 @@ class Respawn():
         self.check_model = False
         self.index = 0
 
+        rospy.loginfo("Goal position : %.1f, %.1f", self.goal_position.position.x,
+                              self.goal_position.position.y)
+
+
     def checkModel(self, model):
         self.check_model = False
         for i in range(len(model.name)):
@@ -45,8 +49,8 @@ class Respawn():
                 rospy.wait_for_service('gazebo/spawn_sdf_model')
                 spawn_model_prox = rospy.ServiceProxy('gazebo/spawn_sdf_model', SpawnModel)
                 spawn_model_prox(self.modelName, self.model, 'robotos_name_space', self.goal_position, "world")
-                rospy.loginfo("Goal position : %.1f, %.1f", self.goal_position.position.x,
-                              self.goal_position.position.y)
+                #rospy.loginfo("Goal position : %.1f, %.1f", self.goal_position.position.x,
+                #              self.goal_position.position.y)
                 break
             else:
                 pass

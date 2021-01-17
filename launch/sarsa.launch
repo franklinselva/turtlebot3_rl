@@ -1,7 +1,7 @@
 <launch>
   <arg name="stage" default="2"/>
   <param name="stage_number"  value="$(arg stage)"/>
-  <param name="use_hitl" value="false" />
+  <param name="use_hitl" value="True" />
   <param name="load_model" value="false" />
 
   <arg name="model" default="burger"/>

@@ -92,7 +92,10 @@ class qLearnAgent():
     def __init__(self, state_size, action_size):
         self.pub_result = rospy.Publisher('result', Float32MultiArray, queue_size=5)
         self.dirPath = os.path.dirname(os.path.realpath(__file__))
-        self.dirPath = self.dirPath.replace('turtlebot3_rl/src', 'turtlebot3_rl/saved_model/q_learning/model_')
+        if rospy.get_param("/use_hitl"):
+            self.dirPath = self.dirPath.replace('turtlebot3_rl/src', 'turtlebot3_rl/saved_model/q_learning_hitl/model_')
+        else:
+            self.dirPath = self.dirPath.replace('turtlebot3_rl/src', 'turtlebot3_rl/saved_model/q_learning/model_')
         self.result = Float32MultiArray()
 
         self.load_model = rospy.get_param("/load_model", False)
@@ -304,11 +307,14 @@ if __name__ == '__main__':
         score = 0
         
         if use_hitl:
-            if e%5 == 0:
-                rospy.loginfo("Waiting for Human in the loop")
+            # print (env.collision)
+            if env.collision % 5 == 0 and env.collision != 0:
+                
+                rospy.loginfo("WAITING FOR HUMAN FEEDBACK!!!")
                 print(vels(speed,turn))
                 publishHITL(pub_thread, agent, False)
-                env.setReward(state, False, action)
+                env.collision += 1 # Counting as collision for human feedback ##BUG##
+                # env.setReward(state, False, action)
             else:
                 publishHITL(pub_thread, agent, True)
 
@@ -332,7 +338,7 @@ if __name__ == '__main__':
             pub_get_action.publish(get_action)
 
             if t > 500:
-                rospy.loginfo("Time out.")
+                # rospy.loginfo("Time out.")
                 done = True
 
             if e % 10 == 0:
@@ -340,8 +346,7 @@ if __name__ == '__main__':
                 with open(agent.dirPath + str(e) + '.json', 'w') as outfile:
                     json.dump(param_dictionary, outfile)
 
-                # writeData(score_list, agent.dirPath + "/data/qlearning_hitl_scores.pickle")
-                # writeData(epsilon_list, agent.dirPath + "/data/qlearning_hitl_epsilon.pickle")
+
 
             if done or env.get_goalbox:
                 result.data = [score, np.max(agent.q_value)]
@@ -360,6 +365,17 @@ if __name__ == '__main__':
 
                 rospy.loginfo('Ep: %d Q value: %.2f Reward %.2f epsilon: %.2f time: %d:%02d:%02d',
                             e, float(np.max(agent.q_value)), score, agent.epsilon, h, m, s)
+
+                if t> 500:
+                    rospy.loginfo("TIME OUT!!!")
+                elif done and not env.get_goalbox:
+                    rospy.loginfo("COLLISION OCCURED!!!")
+                    done = False
+                elif env.get_goalbox:
+                    rospy.loginfo("GOAL REACHED!!!")
+                    env.get_goalbox = False
+                
+
                 param_keys = ['epsilon', 'q-value']
                 param_values = [agent.epsilon, float(np.max(agent.q_value))]
                 param_dictionary = dict(zip(param_keys, param_values))
