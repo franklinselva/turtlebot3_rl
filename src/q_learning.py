@@ -57,7 +57,6 @@ e/c : increase/decrease only angular speed by 10%
 
 CTRL-C to quit
 """
-
 moveBindings = {
         'i':(1,0,0,0),
         'o':(1,0,0,-1),
