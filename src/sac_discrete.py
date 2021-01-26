@@ -316,6 +316,9 @@ class Trainer:
         
         soft_update(self.target_actor, self.actor, TAU)
         soft_update(self.target_critic, self.critic, TAU)
+        
+    def get_qvalue(self):
+        return self.qvalue
     
     def save_models(self, episode_count):
         torch.save(self.target_actor.state_dict(), dirPath +'/Models/' + '/' + str(episode_count)+ '_actor.pt')
@@ -489,7 +492,8 @@ if __name__ == '__main__':
                 # rewards_all_episodes.append(rewards_current_episode)
 
                 result = rewards_current_episode
-                pub_result.publish(result)
+                qvalue = np.max(trainer.get_qvalue())
+                pub_result.publish([result, qvalue])
 
                 # if done or collided
                 break
