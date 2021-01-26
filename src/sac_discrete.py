@@ -9,7 +9,7 @@ import time
 import sys
 sys.path.append(os.path.dirname(os.path.abspath(os.path.dirname(__file__))))
 from collections import deque
-from std_msgs.msg import Float32
+from std_msgs.msg import Float32MultiArray
 import torch
 import torch.nn.functional as F
 import gc
@@ -19,40 +19,116 @@ from collections import deque
 import copy
 
 
-from onu_noise import OUNoise
+import random
+import time
+import sys
+from collections import deque
+import select, termios, tty
+
+from hitl import PublishThread, vels
+from .utils.function import soft_update, hard_update
+from .utils.onu_noise import OUNoise
 from environment import Env
 
 #---Directory Path---#
 dirPath = os.path.dirname(os.path.realpath(__file__))
-#---Functions to make network updates---#
- 
-def soft_update(target, source, tau):
-    for target_param, param in zip(target.parameters(), source.parameters()):
-        target_param.data.copy_(target_param.data*(1.0 - tau)+ param.data*tau)
 
-def hard_update(target,source):
-    for target_param, param in zip(target.parameters(), source.parameters()):
-        target_param.data.copy_(param.data)
 
-#---Mish Activation Function---#
-def mish(x):
-    '''
-        Mish: A Self Regularized Non-Monotonic Neural Activation Function
-        https://arxiv.org/abs/1908.08681v1
-        implemented for PyTorch / FastAI by lessw2020
-        https://github.com/lessw2020/mish
-        param:
-            x: output of a layer of a neural network
-        return: mish activation function
-    '''
-    return x*(torch.tanh(F.softplus(x)))
+#---Run agent---#
+
+is_training = True
+
+exploration_decay_rate = 0.001
+
+MAX_EPISODES = 10001
+MAX_STEPS = 750
+MAX_BUFFER = 200000
+rewards_all_episodes = []
+
+STATE_DIMENSION = 364
+ACTION_DIMENSION = 5
+ACTION_V_MAX = 0.25 # m/s
+ACTION_W_MAX = 2. # rad/s
+
+
+BATCH_SIZE = 100
+LEARNING_RATE = 0.0003
+GAMMA = 0.99
+TAU = 0.001
+
+if is_training:
+    var_v = ACTION_V_MAX*.5
+    var_w = ACTION_W_MAX*2*.5
+    
+x = 0
+y = 0
+z = 0
+th = 0
+status = 0
+key_timeout = None
+speed = None
+repeat = None
+turn = None
+
+msg = """
+Reading from the keyboard  and Publishing to Twist!
+---------------------------
+Moving around:
+   u    i    o
+   j    k    l
+   m    ,    .
+
+For Holonomic mode (strafing), hold down the shift key:
+---------------------------
+   U    I    O
+   J    K    L
+   M    <    >
+
+t : up (+z)
+b : down (-z)
+
+anything else : stop
+
+q/z : increase/decrease max speeds by 10%
+w/x : increase/decrease only linear speed by 10%
+e/c : increase/decrease only angular speed by 10%
+
+CTRL-C to quit
+"""
+
+moveBindings = {
+        'i':(1,0,0,0),
+        'o':(1,0,0,-1),
+        'j':(0,0,0,1),
+        'l':(0,0,0,-1),
+        'u':(1,0,0,1),
+        ',':(-1,0,0,0),
+        '.':(-1,0,0,1),
+        'm':(-1,0,0,-1),
+        'O':(1,-1,0,0),
+        'I':(1,0,0,0),
+        'J':(0,1,0,0),
+        'L':(0,-1,0,0),
+        'U':(1,1,0,0),
+        '<':(-1,0,0,0),
+        '>':(-1,-1,0,0),
+        'M':(-1,1,0,0),
+        't':(0,0,1,0),
+        'b':(0,0,-1,0),
+    }
+
+speedBindings={
+        'q':(1.1,1.1),
+        'z':(.9,.9),
+        'w':(1.1,1),
+        'x':(.9,1),
+        'e':(1,1.1),
+        'c':(1,.9),
+    }
+
 #---Critic--#
 
 EPS = 0.003
-def fanin_init(size, fanin=None):
-    fanin = fanin or size[0]
-    v = 1./np.sqrt(fanin)
-    return torch.Tensor(size).uniform_(-v,v)
 
 class Critic(nn.Module):
     def __init__(self, state_dim, action_dim):
@@ -99,7 +175,7 @@ class Actor(nn.Module):
         self.action_limit_v = action_limit_v
         self.action_limit_w = action_limit_w
         
-        self.fa1 = nn.Linear(state_dim, 250)
+        self.fa1 = nn.Linear(state_dim, 364)
         nn.init.xavier_uniform_(self.fa1.weight)
         self.fa1.bias.data.fill_(0.01)
         # self.fa1.weight.data = fanin_init(self.fa1.weight.data.size())
@@ -120,10 +196,10 @@ class Actor(nn.Module):
         action = self.fa3(x)
         if state.shape <= torch.Size([self.state_dim]):
             action[0] = torch.sigmoid(action[0])*self.action_limit_v
-            action[1] = torch.tanh(action[1])*self.action_limit_w
+            action[1] = torch.softmax(action[1])*self.action_limit_w
         else:
             action[:,0] = torch.sigmoid(action[:,0])*self.action_limit_v
-            action[:,1] = torch.tanh(action[:,1])*self.action_limit_w
+            action[:,1] = torch.softmax(action[:,1])*self.action_limit_w
         return action
 
 #---Memory Buffer---#
@@ -157,12 +233,6 @@ class MemoryBuffer:
             self.len = self.maxSize
         self.buffer.append(transition)
 
-#---Where the train is made---#
-
-BATCH_SIZE = 100
-LEARNING_RATE = 0.001
-GAMMA = 0.99
-TAU = 0.001
 
 class Trainer:
     
@@ -198,11 +268,11 @@ class Trainer:
     def get_exploration_action(self, state):
         state = torch.from_numpy(state)
         action = self.actor.forward(state).detach()
-        #noise = self.noise.sample()
-        #print('noisea', noise)
-        #noise[0] = noise[0]*self.action_limit_v
-        #noise[1] = noise[1]*self.action_limit_w
-        #print('noise', noise)
+        noise = self.noise.sample()
+        # print('noisea', noise)
+        noise[0] = noise[0]*self.action_limit_v
+        noise[1] = noise[1]*self.action_limit_w
+        # print('noise', noise)
         new_action = action.data.numpy() #+ noise
         #print('action_no', new_action)
         return new_action
@@ -236,7 +306,7 @@ class Trainer:
         loss_critic.backward()
         self.critic_optimizer.step()
         
-        #------------ optimize actor
+        
         pred_a_sample = self.actor.forward(s_sample)
         loss_actor = -1*torch.sum(self.critic.forward(s_sample, pred_a_sample))
         
@@ -259,29 +329,7 @@ class Trainer:
         hard_update(self.target_critic, self.critic)
         print('***Models load***')
 
-#---Run agent---#
 
-is_training = True
-
-exploration_decay_rate = 0.001
-
-MAX_EPISODES = 10001
-MAX_STEPS = 750
-MAX_BUFFER = 200000
-rewards_all_episodes = []
-
-STATE_DIMENSION = 364
-ACTION_DIMENSION = 2
-ACTION_V_MAX = 0.25 # m/s
-ACTION_W_MAX = 2. # rad/s
-world = 'world_u'
-
-if is_training:
-    var_v = ACTION_V_MAX*.5
-    var_w = ACTION_W_MAX*2*.5
-else:
-    var_v = ACTION_V_MAX*0.10
-    var_w = ACTION_W_MAX*0.10
 
 print('State Dimensions: ' + str(STATE_DIMENSION))
 print('Action Dimensions: ' + str(ACTION_DIMENSION))
@@ -292,15 +340,86 @@ noise = OUNoise(ACTION_DIMENSION, max_sigma=0.1, min_sigma=0.1, decay_period=800
 trainer.load_models(560)
 
 
+def getKey(key_timeout):
+    tty.setraw(sys.stdin.fileno())
+    rlist, _, _ = select.select([sys.stdin], [], [], key_timeout)
+    if rlist:
+        key = sys.stdin.read(1)
+    else:
+        key = ''
+    termios.tcsetattr(sys.stdin, termios.TCSADRAIN, settings)
+    return key
+
+
+def publishHITL(pub_thread, agent, Done = False):
+    '''
+    Function to call publish thread for teleop key
+    '''
+    global x, y, z, th, speed, turn, key_timeout, status, settings
+    try:
+        pub_thread.wait_for_subscribers()
+        pub_thread.update(x, y, z, th, speed, turn)
+
+        while  not Done:
+            # action = agent.getAction()
+
+            #agent.appendMemory(state, action, )
+            key = getKey(key_timeout)
+            if key in moveBindings.keys():
+                x = moveBindings[key][0]
+                y = moveBindings[key][1]
+                z = moveBindings[key][2]
+                th = moveBindings[key][3]
+            elif key in speedBindings.keys():
+                speed = speed * speedBindings[key][0]
+                turn = turn * speedBindings[key][1]
+
+                print(vels(speed,turn))
+                if (status == 14):
+                    print(msg)
+                status = (status + 1) % 15
+            else:
+                # Skip updating cmd_vel if key timeout and robot already
+                # stopped.
+                if key=='' and  x == 0 and y == 0 and z == 0 and th == 0:
+                    continue
+                x = 0
+                y = 0
+                z = 0
+                th = 0
+                if (key == '\x03'):
+                    break
+ 
+            pub_thread.update(x, y, z, th, speed, turn)
+            agent.updateTargetModel()
+
+    except Exception as e:
+        print(e)
+        pass
+
 if __name__ == '__main__':
-    rospy.init_node('ddpg_sac')
-    pub_result = rospy.Publisher('result', Float32, queue_size=5)
-    result = Float32()
+    rospy.init_node('sac_discrete')
+    pub_result = rospy.Publisher('result', Float32MultiArray, queue_size=5)
+    use_hitl = rospy.get_param("/use_hitl", False)
+    result = Float32MultiArray()
     env = Env(action_dim=ACTION_DIMENSION)
     before_training = 4
 
     past_action = np.zeros(ACTION_DIMENSION)
     rewards_current_episode = 0.
+    
+    global settings
+    settings = termios.tcgetattr(sys.stdin)
+    
+    if use_hitl:
+        speed = rospy.get_param("~speed", 0.5)
+        turn = rospy.get_param("~turn", 2.0)
+        repeat = rospy.get_param("~repeat_rate", 0.0)
+        key_timeout = rospy.get_param("~key_timeout", 0.1)
+        if key_timeout == 0.0:
+            key_timeout = None
+
+        pub_thread = PublishThread(repeat)
     
     for ep in range(MAX_EPISODES):
         done = False
@@ -309,16 +428,19 @@ if __name__ == '__main__':
             print('---------------------------------')
             print('Episode: ' + str(ep) + ' training')
             print('---------------------------------')
-        else:
-            if ram.len >= before_training*MAX_STEPS:
-                print('---------------------------------')
-                print('Episode: ' + str(ep) + ' evaluating')
-                print('---------------------------------')
-            else:
-                print('---------------------------------')
-                print('Episode: ' + str(ep) + ' adding to memory')
-                print('---------------------------------')
 
+        if use_hitl:
+            # print (env.collision)
+            if env.collision % 5 == 0 and env.collision != 0:
+                
+                rospy.loginfo("WAITING FOR HUMAN FEEDBACK!!!")
+                print(vels(speed,turn))
+                publishHITL(pub_thread, agent, False)
+                env.collision += 1 # Counting as collision for human feedback ##BUG##
+                # env.setReward(state, False, action)
+            else:
+                publishHITL(pub_thread, agent, True)
+        
         for step in range(MAX_STEPS):
             state = np.float32(state)
 

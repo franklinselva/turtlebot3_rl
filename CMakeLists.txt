@@ -163,6 +163,7 @@ catkin_install_python(PROGRAMS
   src/q_learning.py
   src/sarsa.py
   src/result_plot.py
+  src/sac_discrete.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 
