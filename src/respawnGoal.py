@@ -98,7 +98,7 @@ class Respawn():
             # goal_y_list = [0, -0.5, -1.9, 1.5, -0.9, 1, 1.1, -1.5, 1.5, 1.8, -1, 1.6, -0.8]
 
             goal_x_list = [1.5]
-            goal_y_list = [-0.5]
+            goal_y_list = [-1.5]
             
             # self.index = random.randrange(0, 13)
             # print(self.index, self.last_index)
