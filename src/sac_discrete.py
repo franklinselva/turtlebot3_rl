@@ -9,7 +9,7 @@ import time
 import sys
 sys.path.append(os.path.dirname(os.path.abspath(os.path.dirname(__file__))))
 from collections import deque
-from std_msgs.msg import Float32MultiArray
+from std_msgs.msg import Float32MultiArray, Float32
 import torch
 import torch.nn.functional as F
 import gc
@@ -26,9 +26,9 @@ from collections import deque
 import select, termios, tty
 
 from hitl import PublishThread, vels
-from .utils.function import soft_update, hard_update
-from .utils.onu_noise import OUNoise
-from environment import Env
+from utils.function import soft_update, hard_update
+from utils.onu_noise import OUNoise
+from new_environment import Env
 
 #---Directory Path---#
 dirPath = os.path.dirname(os.path.realpath(__file__))
@@ -46,9 +46,9 @@ MAX_BUFFER = 200000
 rewards_all_episodes = []
 
 STATE_DIMENSION = 364
-ACTION_DIMENSION = 5
-ACTION_V_MAX = 0.25 # m/s
-ACTION_W_MAX = 2. # rad/s
+ACTION_DIMENSION = 2
+ACTION_V_MAX = 1. # m/s
+ACTION_W_MAX = 0.5 # rad/s
 
 
 BATCH_SIZE = 100
@@ -174,33 +174,41 @@ class Actor(nn.Module):
         self.action_dim = action_dim
         self.action_limit_v = action_limit_v
         self.action_limit_w = action_limit_w
+        self.action = torch.empty(action_dim)
         
-        self.fa1 = nn.Linear(state_dim, 364)
+        self.fa1 = nn.Linear(state_dim, 250)
         nn.init.xavier_uniform_(self.fa1.weight)
         self.fa1.bias.data.fill_(0.01)
         # self.fa1.weight.data = fanin_init(self.fa1.weight.data.size())
         
-        self.fa2 = nn.Linear(250, 250)
+        self.fa2 = nn.Linear(250, 128)
         nn.init.xavier_uniform_(self.fa2.weight)
         self.fa2.bias.data.fill_(0.01)
         # self.fa2.weight.data = fanin_init(self.fa2.weight.data.size())
         
-        self.fa3 = nn.Linear(250, action_dim)
+        self.fa3 = nn.Linear(128, action_dim)
         nn.init.xavier_uniform_(self.fa3.weight)
         self.fa3.bias.data.fill_(0.01)
         # self.fa3.weight.data.uniform_(-EPS,EPS)
-        
+
     def forward(self, state):
         x = torch.relu(self.fa1(state))
         x = torch.relu(self.fa2(x))
         action = self.fa3(x)
-        if state.shape <= torch.Size([self.state_dim]):
-            action[0] = torch.sigmoid(action[0])*self.action_limit_v
-            action[1] = torch.softmax(action[1])*self.action_limit_w
-        else:
-            action[:,0] = torch.sigmoid(action[:,0])*self.action_limit_v
-            action[:,1] = torch.softmax(action[:,1])*self.action_limit_w
-        return action
+        #nprint (action)
+        try:
+            if state.shape <= torch.Size([self.state_dim]):
+                action[0] = torch.sigmoid(action[0])*self.action_limit_v
+                action[1] = torch.tanh(action[1])*self.action_limit_w
+        
+            else:
+                action[:,0] = torch.sigmoid(action[:,0])*self.action_limit_v
+                action[:,1] = torch.tanh(action[:,1])*self.action_limit_w
+        
+        except Exception as e:
+            pass
+        # print (action)
+        return torch.max(action)
 
 #---Memory Buffer---#
 
@@ -237,7 +245,12 @@ class MemoryBuffer:
 class Trainer:
     
     def __init__(self, state_dim, action_dim, action_limit_v, action_limit_w, ram):
-        
+        self.dirPath = os.path.dirname(os.path.realpath(__file__))
+        if rospy.get_param("/use_hitl"):
+            self.dirPath = self.dirPath.replace('turtlebot3_rl/src', 'turtlebot3_rl/saved_model/sac_discrete_hitl/model_')
+        else:
+            self.dirPath = self.dirPath.replace('turtlebot3_rl/src', 'turtlebot3_rl/saved_model/sac_discrete/model_')
+
         self.state_dim = state_dim
         self.action_dim = action_dim
         self.action_limit_v = action_limit_v
@@ -258,6 +271,8 @@ class Trainer:
         
         hard_update(self.target_actor, self.actor)
         hard_update(self.target_critic, self.critic)
+
+        self.noise = OUNoise(ACTION_DIMENSION, max_sigma=0.1, min_sigma=0.1, decay_period=8000000)
         
     def get_exploitation_action(self,state):
         state = torch.from_numpy(state)
@@ -268,12 +283,12 @@ class Trainer:
     def get_exploration_action(self, state):
         state = torch.from_numpy(state)
         action = self.actor.forward(state).detach()
-        noise = self.noise.sample()
+        noise = self.noise.get_noise()
         # print('noisea', noise)
         noise[0] = noise[0]*self.action_limit_v
         noise[1] = noise[1]*self.action_limit_w
         # print('noise', noise)
-        new_action = action.data.numpy() #+ noise
+        new_action = action.data.numpy() + noise
         #print('action_no', new_action)
         return new_action
     
@@ -321,18 +336,16 @@ class Trainer:
         return self.qvalue
     
     def save_models(self, episode_count):
-        torch.save(self.target_actor.state_dict(), dirPath +'/Models/' + '/' + str(episode_count)+ '_actor.pt')
-        torch.save(self.target_critic.state_dict(), dirPath + '/Models/' + '/'+str(episode_count)+ '_critic.pt')
-        print('****Models saved***')
+        torch.save(self.target_actor.state_dict(), self.dirPath + "{}_actor.pt".format(episode_count))
+        torch.save(self.target_critic.state_dict(), self.dirPath + "{}_critic.pt".format(episode_count))
+        rospy.loginfo("MODEL SAVED!!")
         
     def load_models(self, episode):
-        self.actor.load_state_dict(torch.load(dirPath + '/Models/' + '/'+str(episode)+ '_actor.pt'))
-        self.critic.load_state_dict(torch.load(dirPath + '/Models/' + '/'+str(episode)+ '_critic.pt'))
+        self.actor.load_state_dict(torch.load(self.dirPath + "{}_actor.pt".format(episode)))
+        self.critic.load_state_dict(torch.load(self.dirPath + "{}_critic.pt".format(epsiode)))
         hard_update(self.target_actor, self.actor)
         hard_update(self.target_critic, self.critic)
-        print('***Models load***')
-
-
+        rospy.loginfo("MODEL HAS BEEN LOADED!!!")
 
 print('State Dimensions: ' + str(STATE_DIMENSION))
 print('Action Dimensions: ' + str(ACTION_DIMENSION))
@@ -340,7 +353,7 @@ print('Action Max: ' + str(ACTION_V_MAX) + ' m/s and ' + str(ACTION_W_MAX) + ' r
 ram = MemoryBuffer(MAX_BUFFER)
 trainer = Trainer(STATE_DIMENSION, ACTION_DIMENSION, ACTION_V_MAX, ACTION_W_MAX, ram)
 noise = OUNoise(ACTION_DIMENSION, max_sigma=0.1, min_sigma=0.1, decay_period=8000000)
-trainer.load_models(560)
+# trainer.load_models(560)
 
 
 def getKey(key_timeout):
@@ -394,7 +407,7 @@ def publishHITL(pub_thread, agent, Done = False):
                     break
  
             pub_thread.update(x, y, z, th, speed, turn)
-            agent.updateTargetModel()
+            # agent.updateTargetModel()
 
     except Exception as e:
         print(e)
@@ -405,7 +418,7 @@ if __name__ == '__main__':
     pub_result = rospy.Publisher('result', Float32MultiArray, queue_size=5)
     use_hitl = rospy.get_param("/use_hitl", False)
     result = Float32MultiArray()
-    env = Env(action_dim=ACTION_DIMENSION)
+    env = Env(ACTION_DIMENSION, ACTION_V_MAX, ACTION_W_MAX)
     before_training = 4
 
     past_action = np.zeros(ACTION_DIMENSION)
@@ -424,13 +437,11 @@ if __name__ == '__main__':
 
         pub_thread = PublishThread(repeat)
     
-    for ep in range(MAX_EPISODES):
+    start_time = time.time()
+
+    for ep in range(1, MAX_EPISODES):
         done = False
         state = env.reset()
-        if is_training and not ep%10 == 0 and ram.len >= before_training*MAX_STEPS:
-            print('---------------------------------')
-            print('Episode: ' + str(ep) + ' training')
-            print('---------------------------------')
 
         if use_hitl:
             # print (env.collision)
@@ -438,11 +449,11 @@ if __name__ == '__main__':
                 
                 rospy.loginfo("WAITING FOR HUMAN FEEDBACK!!!")
                 print(vels(speed,turn))
-                publishHITL(pub_thread, agent, False)
+                publishHITL(pub_thread, trainer, False)
                 env.collision += 1 # Counting as collision for human feedback ##BUG##
                 # env.setReward(state, False, action)
             else:
-                publishHITL(pub_thread, agent, True)
+                publishHITL(pub_thread, trainer, True)
         
         for step in range(MAX_STEPS):
             state = np.float32(state)
@@ -450,18 +461,13 @@ if __name__ == '__main__':
             # if is_training and not ep%10 == 0 and ram.len >= before_training*MAX_STEPS:
             if is_training and not ep%10 == 0:
                 action = trainer.get_exploration_action(state)
-                
-                N = copy.deepcopy(noise.get_noise(t=step))
-                N[0] = N[0]*ACTION_V_MAX/2
-                N[1] = N[1]*ACTION_W_MAX
-                action[0] = np.clip(action[0] + N[0], 0., ACTION_V_MAX)
-                action[1] = np.clip(action[1] + N[1], -ACTION_W_MAX, ACTION_W_MAX)
+
             else:
                 action = trainer.get_exploration_action(state)
 
             if not is_training:
                 action = trainer.get_exploitation_action(state)
-            next_state, reward, done = env.step(action, past_action)
+            next_state, reward, done = env.step(action)
             # print('action', action,'r',reward)
             past_action = copy.deepcopy(action)
             
@@ -481,19 +487,41 @@ if __name__ == '__main__':
             state = copy.deepcopy(next_state)
             
 
-            if ram.len >= before_training*MAX_STEPS and is_training and not ep%10 == 0:
+            if ram.len >= before_training*MAX_STEPS and is_training and not ep%2 == 0:
+                rospy.loginfo("Models Updated")
                 trainer.optimizer()
 
-            if done or step == MAX_STEPS-1:
-                print('reward per ep: ' + str(rewards_current_episode))
-                print('*\nbreak step: ' + str(step) + '\n*')
-                # print('explore_v: ' + str(var_v) + ' and explore_w: ' + str(var_w))
-                print('sigma: ' + str(noise.sigma))
-                # rewards_all_episodes.append(rewards_current_episode)
+            if step > 500: done = True
+
+            if done or env.get_goalbox: # or step == MAX_STEPS-1:
+
+                m, s = divmod(int(time.time() - start_time), 60)
+                h, m = divmod(m, 60)
+                print ('-'*100)
+                if use_hitl:
+                    rospy.loginfo("SAC WITH DISCRETE ACTIONS ASSISTED HITL!!")
+                else:
+                    rospy.loginfo("SAC WITH DISCRETE ACTIONS!!!")
+
+                rospy.loginfo('Ep: %d Q value: %.2f Reward %.2f Sigma: %.2f time: %d:%02d:%02d',
+                            ep, trainer.get_qvalue().data, float(rewards_current_episode), noise.sigma, h, m, s)
+
+                if step > 500:
+                    rospy.loginfo("TIME OUT!!!")
+                elif done and not env.get_goalbox:
+                    rospy.loginfo("COLLISION OCCURED!!!")
+                    done = False
+                    env.reset()
+                elif env.get_goalbox:
+                    rospy.loginfo("GOAL REACHED!!!")
+                    env.get_goalbox = False
+                    env.reset()
 
                 result = rewards_current_episode
-                qvalue = np.max(trainer.get_qvalue())
-                pub_result.publish([result, qvalue])
+                qvalue = trainer.get_qvalue().data
+                score = Float32MultiArray()
+                score.data = [result, qvalue]
+                pub_result.publish(score)
 
                 # if done or collided
                 break

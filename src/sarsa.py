@@ -261,7 +261,7 @@ if __name__ == '__main__':
                 agent.epsilon *= epsilon_discount
 
             if use_hitl:
-                print (env.collision)
+                # print (env.collision)
                 if env.collision % 5 == 0 and env.collision != 0:
                 
                     rospy.loginfo("WAITING FOR HUMAN FEEDBACK!!!")
