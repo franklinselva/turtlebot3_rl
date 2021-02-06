@@ -135,7 +135,7 @@ class Env():
 
         if self.getGoalDistace() > self.threshold:
             # rospy.loginfo("Taking more distance")
-            reward = -150
+            reward = -500
             self.pub_cmd_vel.publish(Twist())
 
         if self.get_goalbox:

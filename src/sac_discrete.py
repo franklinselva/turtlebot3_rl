@@ -147,7 +147,7 @@ class Critic(nn.Module):
         self.fa1.bias.data.fill_(0.01)
         # self.fa1.weight.data = fanin_init(self.fa1.weight.data.size())
         
-        self.fca1 = nn.Linear(250, 250)
+        self.fca1 = nn.Linear(125, 250)
         nn.init.xavier_uniform_(self.fca1.weight)
         self.fca1.bias.data.fill_(0.01)
         # self.fca1.weight.data = fanin_init(self.fca1.weight.data.size())
@@ -159,9 +159,9 @@ class Critic(nn.Module):
         
     def forward(self, state, action):
         xs = torch.relu(self.fc1(state))
-        xa = torch.relu(self.fa1(action))
-        x = torch.cat((xs,xa), dim=1)
-        x = torch.relu(self.fca1(x))
+        # xa = torch.relu(self.fa1(action))
+        # x = torch.cat((xs,xa), dim=1)
+        x = torch.relu(self.fca1(xs))
         vs = self.fca2(x)
         return vs
 
@@ -311,6 +311,7 @@ class Trainer:
         y_predicted = torch.squeeze(self.critic.forward(s_sample, a_sample))
         #-------Publisher of Vs------
         self.qvalue = y_predicted.detach()
+        # print (self.qvalue)
         self.pub_qvalue.publish(torch.max(self.qvalue))
         #print(self.qvalue, torch.max(self.qvalue))
         #----------------------------
@@ -333,7 +334,10 @@ class Trainer:
         soft_update(self.target_critic, self.critic, TAU)
         
     def get_qvalue(self):
-        return self.qvalue
+        try:
+            return torch.max(self.qvalue)
+        except Exception as e:
+            return np.max(self.qvalue.data)
     
     def save_models(self, episode_count):
         torch.save(self.target_actor.state_dict(), self.dirPath + "{}_actor.pt".format(episode_count))
@@ -445,7 +449,7 @@ if __name__ == '__main__':
 
         if use_hitl:
             # print (env.collision)
-            if env.collision % 5 == 0 and env.collision != 0:
+            if env.collision % 1 == 0 and env.collision != 0:
                 
                 rospy.loginfo("WAITING FOR HUMAN FEEDBACK!!!")
                 print(vels(speed,turn))
@@ -487,8 +491,8 @@ if __name__ == '__main__':
             state = copy.deepcopy(next_state)
             
 
-            if ram.len >= before_training*MAX_STEPS and is_training and not ep%2 == 0:
-                rospy.loginfo("Models Updated")
+            if is_training and ep%3 == 0:
+                # rospy.loginfo("Models Updated")
                 trainer.optimizer()
 
             if step > 500: done = True
@@ -504,7 +508,7 @@ if __name__ == '__main__':
                     rospy.loginfo("SAC WITH DISCRETE ACTIONS!!!")
 
                 rospy.loginfo('Ep: %d Q value: %.2f Reward %.2f Sigma: %.2f time: %d:%02d:%02d',
-                            ep, trainer.get_qvalue().data, float(rewards_current_episode), noise.sigma, h, m, s)
+                            ep, trainer.get_qvalue(), float(rewards_current_episode), noise.sigma, h, m, s)
 
                 if step > 500:
                     rospy.loginfo("TIME OUT!!!")
