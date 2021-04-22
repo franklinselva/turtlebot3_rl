@@ -13,16 +13,20 @@ We will need the turtlebot3 and turtlebot3_simulation packages for these to work
 The commands are concentrated on the simulated robot model but it stays the same for real robot. Initially an environment variable need to set the packages to a specific robot. Turtlebot3 Burger is used and the command to set is as follows.
 
 To enter the bash script of the linux terminal, run
+
 ```sudo nano ~/.bashrc```
 
 At the end of the document, add
+
 ```export TURTLEBOT3_MODEL=burger```
 
 Save the document and reopen the terminal window. 
 Once the robot model is set, to launch the gazebo environment with Turtlebot3 robot model,
+
 ```roslaunch turtlebot3_gazebo turtlebot3_world.launch```
 
 To start the navigation, run
+
 ```roslaunch turtlebot3_navigation turtlebot3_navigation.launch```
 
 ## Turtlebot3 Reinforcement Learning
